@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text;
 using System.Drawing;
@@ -65,7 +65,7 @@ namespace Nevosoft.Supercow
     /// <summary>
     /// Level class from the Supercow game
     /// </summary>
-    public class Level : IDisposable
+    public class Level
     {
         /// <summary>
         /// Level name. Not used in the game, but exists in file, so why not
@@ -121,24 +121,11 @@ namespace Nevosoft.Supercow
         /// Ground at the given coordinates
         /// </returns>
         public int[,,] Grounds { get; set; } = new int[6, 64, 256];
-        private bool disposed;
 
         /// <summary>
         /// Create object of class
         /// </summary>
-        public Level() {}
-        /// <summary>
-        /// Open level from the another <see cref="Level"/>
-        /// </summary>
-        public Level(Level level)
-        {
-            Name = level.Name;
-            Background = level.Background;
-            Task = level.Task;
-            Music = level.Music;
-            Objects = level.Objects;
-            Grounds = level.Grounds;
-        }
+        public Level() { }
         /// <summary>
         /// Open level from file
         /// </summary>
@@ -177,8 +164,8 @@ namespace Nevosoft.Supercow
             try
             {
                 bool Result = false;
-                using (FileStream Fs = new FileStream(filename, FileMode.Create, FileAccess.Write, FileShare.None))
-                { Result = Save(Fs); Fs.Flush(); }
+                using (FileStream fs = new FileStream(filename, FileMode.Create, FileAccess.Write, FileShare.None))
+                    Result = Save(fs);
                 return Result;
             }
             catch { return false; }
@@ -273,7 +260,7 @@ namespace Nevosoft.Supercow
                 }
                 return true;
             }
-            catch {  return false; }
+            catch { return false; }
         }
 
         static string ParseString(string content, string prefix, int startIndex = 0)
@@ -405,36 +392,6 @@ namespace Nevosoft.Supercow
         {
             if (obj is float dec) return dec.ToString(format, CultureInfo.InvariantCulture);
             return "";
-        }
-
-        /// <summary>
-        /// Dispose this class
-        /// </summary>
-        public void Dispose(bool disposing = true)
-        {
-            if (disposed) return;
-            disposed = true;
-            if (disposing)
-            {
-                Name = string.Empty;
-                Objects.Clear();
-                Grounds = null;
-                GC.Collect();
-            }
-        }
-
-        void IDisposable.Dispose()
-        {
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
-        }
-
-        /// <summary>
-        /// Clone this class
-        /// </summary>
-        public Level Clone()
-        {
-            return (Level)MemberwiseClone();
         }
     }
 }
