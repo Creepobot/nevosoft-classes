@@ -1,9 +1,6 @@
-using System;
-using System.IO;
-using System.Text;
+﻿using System.Text;
 using System.Drawing;
 using System.Globalization;
-using System.Collections.Generic;
 
 namespace Nevosoft.Supercow
 {
@@ -388,7 +385,7 @@ namespace Nevosoft.Supercow
             catch { return false; }
         }
 
-        string DecToStr(object obj, string format)
+        static string DecToStr(object obj, string format)
         {
             if (obj is float dec) return dec.ToString(format, CultureInfo.InvariantCulture);
             return "";
