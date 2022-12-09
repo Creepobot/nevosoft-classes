@@ -63,7 +63,7 @@ namespace Nevosoft.Supercow
     }
 
     /// <summary>
-    /// Level class from the Supercow game
+    /// Level class from the Supercow game. Has the ".lev" extension
     /// </summary>
     public class Level
     {
@@ -118,7 +118,7 @@ namespace Nevosoft.Supercow
         /// <br/>The second and third numbers are the Y and X positions on the array
         /// </summary>
         /// <returns>
-        /// Ground at the given coordinates
+        /// Ground number at the given coordinates
         /// </returns>
         public int[,,] Grounds { get; set; } = new int[6, 64, 256];
 
