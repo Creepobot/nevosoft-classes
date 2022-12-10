@@ -123,6 +123,8 @@ namespace Nevosoft
                 throw new ArgumentNullException();
             if (!(stream.CanRead && stream.CanSeek))
                 throw new FileLoadException("Stream reading or seeking is not avaiable!");
+            if (stream.Length != 4104)
+                throw new Exception("This file is not a font file");
             try
             {
                 stream.Seek(0, SeekOrigin.Begin);
