@@ -53,9 +53,20 @@ namespace Nevosoft.Supercow
         /// <description>If the object is a jewel or power up or even guillotine, sets the respawn speed in seconds<br/>Example:<code>0.5</code></description>
         /// </item>
         /// <item>
-        /// <term><see cref="decimal"/>s</term>
+        /// <term><see cref="decimal"/></term>
         /// <description>If the object is a moving platform, sets the speed
-        /// <br/>(not in seconds, in who the fuck knows what)<br/>Example:<code>69.420s</code></description>
+        /// <br/>(not in seconds, in who the fuck knows what)
+        /// <br/>It can also have a <see cref="string"/> meaning sound playback:
+        /// <list type="bullet">
+        /// <item>
+        /// <term>s</term>
+        /// <description>Platform floats and plays a corresponding sound</description>
+        /// </item>
+        /// <item>
+        /// <term>m</term>
+        /// <description>Platform floats silently</description>
+        /// </item>
+        /// </list><br/>Example:<code>69.420s</code></description>
         /// </item>
         /// </list>
         /// </summary>
@@ -115,12 +126,14 @@ namespace Nevosoft.Supercow
         public List<LevelObject> Objects { get; set; } = new List<LevelObject>();
         /// <summary>
         /// Array of grounds located on the level<br/>First number is the array layer (maximum 5)
-        /// <br/>The second and third numbers are the Y and X positions on the array
+        /// <br/>The second and third numbers are the X and Y positions on the array
         /// </summary>
         /// <returns>
         /// Ground number at the given coordinates
         /// </returns>
-        public int[,,] Grounds { get; set; } = new int[6, 64, 256];
+        public int[][,] Grounds { get; set; } = new int[6][,]
+        { new int[256,64], new int[256,64], new int[256,64],
+           new int[256,64], new int[256,64], new int[256,64] };
 
         /// <summary>
         /// Create object of class
@@ -129,138 +142,107 @@ namespace Nevosoft.Supercow
         /// <summary>
         /// Open level from file
         /// </summary>
-        public Level(string filename)
-        {
-            Load(filename);
-        }
+        public Level(string filename) => Load(filename);
         /// <summary>
-        /// Open level from stream
+        /// Open level from <see cref="Stream"/>
         /// </summary>
-        public Level(Stream stream)
-        {
-            Load(stream);
-        }
+        public Level(Stream stream) => Load(stream);
 
         /// <summary>
-        /// Create object of class from the given file
+        /// Create object of class from file
         /// </summary>
-        public static Level FromFile(string filename)
-        {
-            return new Level(filename);
-        }
+        public static Level FromFile(string filename) => new Level(filename);
         /// <summary>
-        /// Create object of class from the given stream
+        /// Create object of class from <see cref="Stream"/>
         /// </summary>
-        public static Level FromStream(Stream stream)
-        {
-            return new Level(stream);
-        }
+        public static Level FromStream(Stream stream) => new Level(stream);
 
         /// <summary>
         /// Save level to file
         /// </summary>
-        public bool Save(string filename)
+        public void Save(string filename)
         {
-            try
-            {
-                bool Result = false;
-                using (FileStream fs = new FileStream(filename, FileMode.Create, FileAccess.Write, FileShare.None))
-                    Result = Save(fs);
-                return Result;
-            }
-            catch { return false; }
+            using (FileStream fs = new FileStream(filename,
+                FileMode.Create, FileAccess.Write, FileShare.None))
+                Save(fs);
         }
 
-        /// <summary>
-        /// Load level from file
-        /// </summary>
-        public bool Load(string filename)
+        private void Load(string filename)
         {
             if (!File.Exists(filename))
                 throw new FileNotFoundException("File \"" + filename + "\" not found!");
-            try
-            {
-                using (FileStream FS = new FileStream(filename, FileMode.Open))
-                    return Load(FS);
-            }
-            catch { return false; }
+            using (FileStream FS = new FileStream(filename, FileMode.Open))
+                    Load(FS);
         }
 
-        /// <summary>
-        /// Load level from stream
-        /// </summary>
-        public bool Load(Stream stream)
+        private void Load(Stream stream)
         {
             if (stream == null)
                 throw new ArgumentNullException(null);
             if (!(stream.CanRead && stream.CanSeek))
                 throw new FileLoadException("Stream reading or seeking is not avaiable!");
-            try
+
+            stream.Seek(0, SeekOrigin.Begin);
+            using (StreamReader sr = new StreamReader(stream))
             {
-                stream.Seek(0, SeekOrigin.Begin);
-                using (StreamReader sr = new StreamReader(stream))
+                string content = sr.ReadToEnd();
+                Name = ParseString(content, "levelname=");
+                Objects.Capacity = ParseInt(content, "numlevelobjs=");
+                Background = ParseInt(content, "curlevelback=");
+                Task = ParseInt(content, "curleveltask=");
+                Music = ParseInt(content, "curlevelmusic=");
+
+                var index = 0;
+                for (var i = 0; i < Objects.Capacity; i++)
                 {
-                    string content = sr.ReadToEnd();
-                    Name = ParseString(content, "levelname=");
-                    Objects.Capacity = ParseInt(content, "numlevelobjs=");
-                    Background = ParseInt(content, "curlevelback=");
-                    Task = ParseInt(content, "curleveltask=");
-                    Music = ParseInt(content, "curlevelmusic=");
+                    index = content.IndexOf("<obj", index);
+                    if (index == -1) break;
+                    var obj = new LevelObject();
+                    var endIndex = content.IndexOf("</obj", index);
 
-                    var index = 0;
-                    for (var i = 0; i < Objects.Capacity; i++)
+                    obj.Name = ParseString(content, "name=", index);
+
+                    var rect = new float[4];
+                    ParseFloatArray(content, "rect=", rect, index);
+                    obj.Rectangle = RectangleF.FromLTRB(rect[0], rect[1], rect[2], rect[3]);
+
+                    obj.DrawLayer = ParseInt(content, "drawlayer=", index);
+                    obj.Rotation = ParseFloat(content, "rotation=", index);
+
+                    var endPos = new float[2];
+                    ParseFloatArray(content, "endpos=", endPos, index);
+                    obj.EndPosition = new PointF(endPos[0], endPos[1]);
+
+                    obj.Inverted = ParseInt(content, "invertobj=", index) != 0;
+
+                    var extraparamIndex = content.IndexOf("extraparam=", index);
+                    if (extraparamIndex != -1 && extraparamIndex < endIndex)
+                        obj.ExtraParameter = ParseString(content, "extraparam=", index);
+
+                    Objects.Add(obj);
+                    index = endIndex;
+                }
+
+                for (var j = 0; j < 6; j++)
+                {
+                    var prefix = $"groundlayer{j}=";
+                    var layerIndex = content.IndexOf(prefix);
+                    if (layerIndex == -1) break;
+
+                    layerIndex += prefix.Length;
+                    layerIndex += 2;
+
+                    for (var k = 0; k < 64; k++)
                     {
-                        index = content.IndexOf("<obj", index);
-                        if (index == -1) break;
-                        var obj = new LevelObject();
-                        var endIndex = content.IndexOf("</obj", index);
-
-                        obj.Name = ParseString(content, "name=", index);
-
-                        var rect = new float[4];
-                        ParseFloatArray(content, "rect=", rect, index);
-                        obj.Rectangle = RectangleF.FromLTRB(rect[0], rect[1], rect[2], rect[3]);
-
-                        obj.DrawLayer = ParseInt(content, "drawlayer=", index);
-                        obj.Rotation = ParseFloat(content, "rotation=", index);
-
-                        var endPos = new float[2];
-                        ParseFloatArray(content, "endpos=", endPos, index);
-                        obj.EndPosition = new PointF(endPos[0], endPos[1]);
-
-                        obj.Inverted = ParseInt(content, "invertobj=", index) != 0;
-
-                        var extraparamIndex = content.IndexOf("extraparam=", index);
-                        if (extraparamIndex != -1 && extraparamIndex < endIndex)
-                            obj.ExtraParameter = ParseExtraparameter(content, "extraparam=", index);
-
-                        Objects.Add(obj);
-                        index = endIndex;
-                    }
-
-                    for (var j = 0; j < 6; j++)
-                    {
-                        var prefix = $"groundlayer{j}=";
-                        var layerIndex = content.IndexOf(prefix);
-                        if (layerIndex == -1) break;
-
-                        layerIndex += prefix.Length;
-                        layerIndex += 2;
-
-                        for (var k = 0; k < 64; k++)
+                        for (var m = 0; m < 256; m++)
                         {
-                            for (var m = 0; m < 256; m++)
-                            {
-                                Grounds[j, k, m] = content[layerIndex] - '0';
-                                layerIndex++;
-                            }
-                            layerIndex += 2;
+                            Grounds[j][m, k] = content[layerIndex] - '0';
+                            layerIndex++;
                         }
+                        layerIndex += 2;
                     }
                 }
-                return true;
             }
-            catch { return false; }
         }
 
         static string ParseString(string content, string prefix, int startIndex = 0)
@@ -314,81 +296,62 @@ namespace Nevosoft.Supercow
             }
         }
 
-        static string ParseExtraparameter(string content, string prefix, int startIndex = 0)
-        {
-            var res = content.IndexOf(prefix, startIndex);
-            if (res != -1)
-            {
-                var src = res + prefix.Length;
-                var i = src;
-
-                for (; content[i] != '\r' || content[i + 2] != '\r'; i++) { }
-                if (!(content[src] > '0' && content[src] < '9') && content[src] != 's' && content[src] != 't')
-                    return "";
-                return content.Substring(src, i - src);
-            }
-            return "";
-        }
-
         /// <summary>
-        /// Save level to stream
+        /// Save level to <see cref="Stream"/>
         /// </summary>
-        public bool Save(Stream stream)
+        public void Save(Stream stream)
         {
             if (stream == null)
                 throw new ArgumentNullException(null);
             if (!(stream.CanWrite && stream.CanSeek))
                 throw new FileLoadException("Stream writing or seeking is not avaiable!");
-            try
-            {
-                stream.Seek(0, SeekOrigin.Begin);
-                using (StreamWriter sw = new StreamWriter(stream, Encoding.UTF8))
-                {
-                    sw.Write($"levelname={Name}\r\n");
-                    sw.Write($"numlevelobjs={Objects.Capacity}\r\n\r\n");
-                    sw.Write($"curlevelback={Background}\r\n\r\n");
-                    sw.Write($"curleveltask={Task}\r\n\r\n");
-                    sw.Write($"curlevelmusic={Music}\r\n\r\n");
 
-                    for (int i = 0; i < Objects.Capacity; i++)
+            stream.Seek(0, SeekOrigin.Begin);
+            using (StreamWriter sw = new StreamWriter(stream, Encoding.UTF8))
+            {
+                sw.Write($"levelname={Name}\r\n");
+                sw.Write($"numlevelobjs={Objects.Count}\r\n\r\n");
+                sw.Write($"curlevelback={Background}\r\n\r\n");
+                sw.Write($"curleveltask={Task}\r\n\r\n");
+                sw.Write($"curlevelmusic={Music}\r\n\r\n");
+
+                for (int i = 0; i < Objects.Count; i++)
+                {
+                    var obj = Objects[i];
+                    sw.Write($"<obj{i}/>\r\n");
+                    sw.Write($"    name={obj.Name}\r\n");
+                    var r = obj.Rectangle;
+                    sw.Write($"    rect={{{DecToStr(r.Left, "0.00")},{DecToStr(r.Top, "0.00")}," +
+                        $"{DecToStr(r.Right, "0.00")},{DecToStr(r.Bottom, "0.00")}}}\r\n");
+                    sw.Write($"    drawlayer={obj.DrawLayer}\r\n");
+                    sw.Write($"    rotation={DecToStr(obj.Rotation, "0.000")}\r\n");
+                    var ep = obj.EndPosition;
+                    sw.Write($"    endpos={{{DecToStr(ep.X, "0.00")},{DecToStr(ep.Y, "0.00")}}}\r\n");
+                    sw.Write($"    invertobj={(obj.Inverted ? 1 : 0)}\r\n");
+                    if (obj.ExtraParameter != "" && obj.ExtraParameter != null)
+                        sw.Write($"    extraparam={obj.ExtraParameter}\r\n\r\n");
+                    sw.Write($"</obj{i}>\r\n\r\n\r\n");
+                }
+
+                sw.Write($"\r\n\r\n");
+                for (var j = 0; j < 6; j++)
+                {
+                    sw.Write($"groundlayer{j}=\r\n");
+                    for (var k = 0; k < 64; k++)
                     {
-                        var obj = Objects[i];
-                        sw.Write($"<obj{i}/>\r\n");
-                        sw.Write($"    name={obj.Name}\r\n");
-                        var r = obj.Rectangle;
-                        sw.Write($"    rect={{{DecToStr(r.Left, "0.00")},{DecToStr(r.Top, "0.00")}," +
-                            $"{DecToStr(r.Right, "0.00")},{DecToStr(r.Bottom, "0.00")}}}\r\n");
-                        sw.Write($"    drawlayer={obj.DrawLayer}\r\n");
-                        sw.Write($"    rotation={DecToStr(obj.Rotation, "0.000")}\r\n");
-                        var ep = obj.EndPosition;
-                        sw.Write($"    endpos={{{DecToStr(ep.X, "0.00")},{DecToStr(ep.Y, "0.00")}}}\r\n");
-                        sw.Write($"    invertobj={(obj.Inverted ? 1 : 0)}\r\n");
-                        if (obj.ExtraParameter != "" && obj.ExtraParameter != null)
-                            sw.Write($"    extraparam={obj.ExtraParameter}\r\n\r\n");
-                        sw.Write($"</obj{i}>\r\n\r\n\r\n");
-                    }
-                    sw.Write($"\r\n\r\n");
-                    for (var j = 0; j < 6; j++)
-                    {
-                        sw.Write($"groundlayer{j}=\r\n");
-                        for (var k = 0; k < 64; k++)
+                        for (var m = 0; m < 256; m++)
                         {
-                            for (var m = 0; m < 256; m++)
-                            {
-                                sw.Write(Grounds[j, k, m]);
-                            }
-                            sw.Write($"\r\n");
+                            sw.Write(Grounds[j][m, k]);
                         }
                         sw.Write($"\r\n");
                     }
-                    sw.Write($"\r\n\r\n");
+                    sw.Write($"\r\n");
                 }
-                return true;
+                sw.Write($"\r\n\r\n");
             }
-            catch { return false; }
         }
 
-        static string DecToStr(object obj, string format)
+        private static string DecToStr(object obj, string format)
         {
             if (obj is float dec) return dec.ToString(format, CultureInfo.InvariantCulture);
             return "";
