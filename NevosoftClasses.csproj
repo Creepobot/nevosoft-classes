@@ -41,7 +41,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="NevosoftFont.cs" />
+    <Compile Include="JPGA.cs" />
+    <Compile Include="FontV2.cs" />
     <Compile Include="SupercowLevel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
